@@ -1,56 +1,52 @@
 #!/usr/bin/env ruby
 
-input = File.read '07.txt'
-
 $order = '23456789TJQKA'
 $values = $order.split('').each_with_index.map{|l,i| [l, i+2] }.to_h
 
-cards = input.split("\n")
-
-five = []
-four = []
-full = []
-three = []
-pairs = []
-pair = []
-rest = []
-
-cards.each{|card| 
-	hand, bid = card.split(" ")
-	groups = hand.split('')
-		.each_with_object({}){|c,h| h[c] = 0 if !h[c]; h[c] += 1 }
-		.each_with_object({}){|(l,c),h| h[c] = [] if !h[c]; h[c] << l }
-		.map{|k,v| [k, v.map{|l| $values[l] }.sort.reverse] }
-		.sort_by{|e|-e[0]}.to_h
-	card = { :hand => hand, :bid => bid.to_i, :groups => groups } 
-	if card[:groups][5] then five << card
-	elsif card[:groups][4] then four << card
-	elsif card[:groups][3] then
-		if card[:groups][2] then full << card else three << card end
-	elsif card[:groups][2] then 
-		if card[:groups][2].count > 1 then pairs << card else pair << card end
-	else rest << card end
-}
-
-def order cards
-	cards.sort{|a,b|
-		diff = $values[a[:hand][0]] - $values[b[:hand][0]]
-		diff = $values[a[:hand][1]] - $values[b[:hand][1]] if diff == 0
-		diff = $values[a[:hand][2]] - $values[b[:hand][2]] if diff == 0
-		diff = $values[a[:hand][3]] - $values[b[:hand][3]] if diff == 0
-		diff = $values[a[:hand][4]] - $values[b[:hand][4]] if diff == 0
-		diff
-	}
+class Symbol
+	def value; {
+		:rest => 1, :pair => 2, :pairs => 3, :three => 4,
+		:full => 5, :four => 6, :five  => 7
+	}[self]; end
 end
 
-five = order five
-four = order four
-full = order full
-three = order three
-pairs = order pairs
-pair = order pair
-rest = order rest
+class String
+	def ordered
+		self.split('').sort{|a,b|
+			res = self.scan(b).count <=> self.scan(a).count
+			res = $values[b] <=> $values[a] if res == 0
+			res
+		}.join
+	end
+	def compare str
+		diff = 0
+		0.upto(4){|i| diff = $values[self[i]] - $values[str[i]]; break if diff != 0 }
+		diff
+	end
+	def cls
+		return :five   if self.match /(.)\1\1\1\1/
+		return :four   if self.match /(.).*\1.*\1.*\1/
+		return :full   if self.match /(.)\1\1(.)\2/
+		return :three  if self.match /(.).*\1.*\1/
+		return :pairs  if self.scan(/(.).*\1/).count == 2
+		return :pair   if self.match /(.).*\1/
+		:rest
+	end
+end
 
-all = rest + pair + pairs + three + full + four + five
+input = File.read '07.txt'
+cards = input.split("\n")
 
-puts all.each_with_index.map{|c,i| c[:bid] * (i+1) }.reduce(:+)
+cards = cards.map{|card|
+	hand, bid = card.split(" ")
+	ohand = hand.ordered
+	card = { :hand => hand, :ohand => ohand, :bid => bid.to_i, :cls => ohand.cls }
+}
+
+cards = cards.sort{|a,b|
+	res = a[:cls].value <=> b[:cls].value
+	res = a[:hand].compare(b[:hand]) if res == 0
+	res
+}
+
+puts cards.each_with_index.map{|c,i| c[:bid] * (i+1) }.reduce(:+)
